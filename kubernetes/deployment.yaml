@@ -4,7 +4,6 @@
   name: ivolve-web
   namespace: ivolve
  spec:
- 5
   replicas: 2
   selector:
     matchLabels:
