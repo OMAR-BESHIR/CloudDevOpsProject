@@ -1,0 +1,5 @@
+- hosts: configure_Jenkins
+  become: true
+  roles:
+    - common
+    - jenkin

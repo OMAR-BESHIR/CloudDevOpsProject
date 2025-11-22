@@ -1,0 +1,833 @@
+# CloudDevOpsProject - Complete Documentation
+
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [Architecture Overview](#architecture-overview)
+3. [Prerequisites](#prerequisites)
+4. [Project Structure](#project-structure)
+5. [Setup Instructions](#setup-instructions)
+6. [Usage Guide](#usage-guide)
+7. [Troubleshooting](#troubleshooting)
+
+---
+
+## Project Overview
+
+This is a comprehensive Cloud & DevOps graduation project that demonstrates the complete CI/CD pipeline and infrastructure automation using modern DevOps tools and practices.
+
+**Project Name:** CloudDevOpsProject  
+**Application:** Flask-based web application  
+**Main Technologies:** Docker, Kubernetes, Terraform, Ansible, Jenkins, ArgoCD
+
+### Key Features
+- Containerized Flask application
+- Kubernetes orchestration with namespace isolation
+- Infrastructure as Code using Terraform
+- Configuration management with Ansible
+- Automated CI/CD pipeline with Jenkins
+- GitOps deployment using ArgoCD
+- AWS cloud infrastructure
+
+---
+
+## Architecture Overview
+
+### Application Flow
+```
+Developer → GitHub → Jenkins → Docker Build → DockerHub → ArgoCD → Kubernetes → Users
+```
+
+### Infrastructure Components
+
+#### 1. **Application Layer**
+- **Flask Application**: Simple web app displaying iVolve branding
+- **Docker Container**: Containerized using Python 3.11 slim image
+- **Container Registry**: DockerHub for storing images
+
+#### 2. **Orchestration Layer**
+- **Kubernetes Cluster**: Minikube/EKS for container orchestration
+- **Namespace**: `ivolve` for application isolation
+- **Deployment**: 2 replicas for high availability
+- **Service**: LoadBalancer type for external access
+
+#### 3. **Infrastructure Layer (AWS)**
+- **VPC**: Custom Virtual Private Cloud
+- **Subnets**: Public subnets with Internet Gateway
+- **EC2**: Jenkins server with security groups
+- **S3**: Terraform state backend
+- **CloudWatch**: Monitoring and logging
+
+#### 4. **CI/CD Pipeline**
+- **Jenkins**: Automated build and deployment pipeline
+- **ArgoCD**: GitOps continuous deployment
+- **Ansible**: Configuration management for EC2 instances
+
+### Architecture Diagram
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         AWS Cloud                            │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │                    VPC                                  │ │
+│  │  ┌──────────────┐         ┌──────────────┐            │ │
+│  │  │ Public Subnet│         │ Public Subnet│            │ │
+│  │  │              │         │              │            │ │
+│  │  │  Jenkins EC2 │         │  EKS Cluster │            │ │
+│  │  │              │         │              │            │ │
+│  │  └──────┬───────┘         └──────┬───────┘            │ │
+│  │         │                        │                     │ │
+│  │         └────────────┬───────────┘                     │ │
+│  │                      │                                 │ │
+│  │              ┌───────▼────────┐                        │ │
+│  │              │  Internet GW   │                        │ │
+│  │              └────────────────┘                        │ │
+│  └────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                         │
+                ┌────────▼─────────┐
+                │                  │
+          GitHub Repo         DockerHub
+                │                  │
+                └────────┬─────────┘
+                         │
+                    Developer
+```
+
+---
+
+## Prerequisites
+
+### Required Software
+- **Git**: Version control
+- **Docker**: Container runtime (v20.10+)
+- **Kubernetes**: Minikube or EKS access
+- **kubectl**: Kubernetes CLI (v1.24+)
+- **Terraform**: Infrastructure provisioning (v1.0+)
+- **Ansible**: Configuration management (v2.9+)
+- **AWS CLI**: AWS resource management
+- **Jenkins**: CI/CD server
+- **ArgoCD**: GitOps deployment tool
+
+### Required Accounts
+- GitHub account
+- DockerHub account
+- AWS account with appropriate permissions
+
+### Required Permissions
+- AWS: EC2, VPC, S3, IAM, CloudWatch
+- GitHub: Repository access
+- DockerHub: Push/pull images
+
+---
+
+## Project Structure
+
+```
+CloudDevOpsProject/
+├── README.md
+├── Dockerfile
+├── app/
+│   ├── app.py
+│   ├── requirements.txt
+│   ├── templates/
+│   │   └── index.html
+│   └── static/
+│       ├── style.css
+│       └── logos/
+│           ├── ivolve-logo.png
+│           └── nti-logo.png
+├── kubernetes/
+│   ├── namespace.yaml
+│   ├── deployment.yaml
+│   └── service.yaml
+├── terraform/
+│   ├── backend.tf
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   └── modules/
+│       ├── network/
+│       │   ├── main.tf
+│       │   ├── variables.tf
+│       │   └── outputs.tf
+│       └── server/
+│           ├── main.tf
+│           ├── variables.tf
+│           └── outputs.tf
+├── ansible/
+│   ├── inventory/
+│   │   └── aws_ec2.yaml
+│   ├── playbook.yaml
+│   └── roles/
+│       ├── common/
+│       │   └── tasks/
+│       │       └── main.yaml
+│       └── jenkins/
+│           └── tasks/
+│               └── main.yaml
+├── jenkins/
+│   ├── Jenkinsfile
+│   └── vars/
+│       └── shared.groovy
+├── argocd/
+│   └── application.yaml
+└── docs/
+    ├── README.md (this file)
+    ├── architecture.md
+    └── setup.md
+```
+
+---
+
+## Setup Instructions
+
+### 1. GitHub Repository Setup
+
+#### Create Repository
+```bash
+# Create new repository on GitHub named "CloudDevOpsProject"
+# Then clone it locally
+git clone https://github.com/YOUR_GITHUB_USERNAME/CloudDevOpsProject.git
+cd CloudDevOpsProject
+```
+
+#### Initialize Project
+```bash
+# Copy all project files to the repository
+# Add and commit
+git add .
+git commit -m "Initial project setup with complete structure"
+git push origin main
+```
+
+---
+
+### 2. Docker Containerization
+
+#### Build Docker Image Locally
+```bash
+# Navigate to project root
+cd CloudDevOpsProject
+
+# Build the Docker image
+docker build -t ivolve-app:latest .
+
+# Test the image locally
+docker run -p 5000:5000 ivolve-app:latest
+
+# Access application at http://localhost:5000
+```
+
+#### Push to DockerHub
+```bash
+# Login to DockerHub
+docker login -u YOUR_DOCKERHUB_USERNAME
+
+# Tag the image
+docker tag ivolve-app:latest YOUR_DOCKERHUB_USERNAME/ivolve:latest
+
+# Push to DockerHub
+docker push YOUR_DOCKERHUB_USERNAME/ivolve:latest
+```
+
+**Dockerfile Explanation:**
+- Base image: `python:3.11-slim` (lightweight)
+- Working directory: `/app`
+- Installs Flask dependencies
+- Exposes port 5000
+- Runs Flask application
+
+---
+
+### 3. Kubernetes Setup
+
+#### Option A: Using Minikube (Local Development)
+
+```bash
+# Start Minikube
+minikube start --driver=docker
+
+# Create iVolve namespace
+kubectl apply -f kubernetes/namespace.yaml
+
+# Deploy application
+kubectl apply -f kubernetes/deployment.yaml
+kubectl apply -f kubernetes/service.yaml
+
+# Check deployment status
+kubectl get pods -n ivolve
+kubectl get svc -n ivolve
+
+# Access application (Minikube)
+minikube service ivolve-svc -n ivolve
+```
+
+#### Option B: Using EKS (AWS)
+
+```bash
+# Configure AWS CLI
+aws configure
+
+# Create EKS cluster (using eksctl or Terraform)
+eksctl create cluster --name ivolve-cluster --region us-east-1
+
+# Update kubeconfig
+aws eks update-kubeconfig --name ivolve-cluster --region us-east-1
+
+# Apply Kubernetes manifests
+kubectl apply -f kubernetes/namespace.yaml
+kubectl apply -f kubernetes/deployment.yaml
+kubectl apply -f kubernetes/service.yaml
+
+# Get LoadBalancer URL
+kubectl get svc -n ivolve
+```
+
+**Important:** Update `YOUR_DOCKERHUB_USERNAME/ivolve:latest` in `kubernetes/deployment.yaml` with your actual DockerHub image.
+
+---
+
+### 4. Terraform Infrastructure Setup
+
+#### Configure AWS Credentials
+```bash
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_DEFAULT_REGION="us-east-1"
+```
+
+#### Create S3 Bucket for Terraform State
+```bash
+# Create S3 bucket
+aws s3 mb s3://my-terraform-state-bucket --region us-east-1
+
+# Enable versioning
+aws s3api put-bucket-versioning \
+  --bucket my-terraform-state-bucket \
+  --versioning-configuration Status=Enabled
+```
+
+#### Initialize and Apply Terraform
+```bash
+cd terraform/
+
+# Initialize Terraform
+terraform init
+
+# Review planned changes
+terraform plan
+
+# Apply infrastructure
+terraform apply -auto-approve
+
+# Get outputs
+terraform output
+```
+
+#### Terraform Components
+
+**Network Module:**
+- VPC with CIDR block
+- Public subnets across availability zones
+- Internet Gateway
+- Route tables
+- Network ACLs
+
+**Server Module:**
+- EC2 instance for Jenkins
+- Security groups (ports 22, 8080, 443)
+- CloudWatch monitoring
+- IAM roles and policies
+
+**State Management:**
+- Remote backend in S3
+- State locking with DynamoDB (optional)
+
+---
+
+### 5. Ansible Configuration
+
+#### Install Ansible
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install ansible -y
+
+# Verify installation
+ansible --version
+```
+
+#### Configure Dynamic Inventory
+```bash
+cd ansible/
+
+# Install boto3 for AWS dynamic inventory
+pip install boto3 botocore
+
+# Test dynamic inventory
+ansible-inventory -i inventory/aws_ec2.yaml --list
+```
+
+#### Run Ansible Playbook
+```bash
+# Test connectivity
+ansible all -i inventory/aws_ec2.yaml -m ping
+
+# Run playbook to configure Jenkins server
+ansible-playbook -i inventory/aws_ec2.yaml playbook.yaml
+
+# Verify Jenkins installation
+# Access Jenkins at http://EC2_PUBLIC_IP:8080
+```
+
+#### Ansible Roles
+
+**Common Role:**
+- Updates system packages
+- Installs Git, Docker, Java (OpenJDK 11)
+- Configures system settings
+
+**Jenkins Role:**
+- Adds Jenkins repository
+- Installs Jenkins
+- Starts and enables Jenkins service
+- Retrieves initial admin password
+
+---
+
+### 6. Jenkins CI/CD Pipeline
+
+#### Access Jenkins
+```bash
+# Get initial admin password from EC2
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+
+# Access Jenkins UI
+http://EC2_PUBLIC_IP:8080
+```
+
+#### Configure Jenkins
+
+1. **Install Required Plugins:**
+   - Docker Pipeline
+   - Git Plugin
+   - Credentials Plugin
+   - Pipeline Plugin
+
+2. **Add Credentials:**
+   - DockerHub token: `dockerhub-token`
+   - GitHub SSH key: `github-ssh-key`
+
+3. **Create Pipeline:**
+   - New Item → Pipeline
+   - Definition: Pipeline script from SCM
+   - SCM: Git
+   - Repository URL: `https://github.com/YOUR_GITHUB_USERNAME/CloudDevOpsProject`
+   - Script Path: `jenkins/Jenkinsfile`
+
+#### Pipeline Stages
+
+1. **Checkout**: Clone repository
+2. **Build Image**: Build Docker image with build number tag
+3. **Push Image**: Push to DockerHub registry
+4. **Cleanup**: Remove local Docker image
+5. **Update Manifests**: Update Kubernetes deployment with new image tag
+6. **Push Manifests**: Commit and push changes to trigger ArgoCD sync
+
+#### Shared Library (Optional)
+- Located in `jenkins/vars/shared.groovy`
+- Reusable pipeline functions
+- Standardized error handling
+
+---
+
+### 7. ArgoCD Continuous Deployment
+
+#### Install ArgoCD
+```bash
+# Create namespace
+kubectl create namespace argocd
+
+# Install ArgoCD
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# Wait for pods to be ready
+kubectl wait --for=condition=available --timeout=600s deployment --all -n argocd
+```
+
+#### Access ArgoCD UI
+```bash
+# Get initial admin password
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+
+# Port forward to access UI
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+
+# Access UI at https://localhost:8080
+# Username: admin
+# Password: (from command above)
+```
+
+#### Deploy Application via ArgoCD
+```bash
+# Apply ArgoCD application manifest
+kubectl apply -f argocd/application.yaml
+
+# Check application status
+kubectl get application -n argocd
+
+# Sync application
+kubectl patch application ivolve-app -n argocd --type merge -p '{"operation":{"initiatedBy":{"username":"admin"},"sync":{}}}'
+```
+
+#### ArgoCD Configuration
+
+**Sync Policy:**
+- **Automated**: Automatically syncs when Git repository changes
+- **Prune**: Removes resources deleted from Git
+- **Self-Heal**: Reverts manual changes to match Git state
+
+**Source:**
+- Repository: Your GitHub repository
+- Path: `kubernetes/` directory
+- Revision: `HEAD` (main branch)
+
+**Destination:**
+- Cluster: In-cluster (where ArgoCD is installed)
+- Namespace: `ivolve`
+
+---
+
+## Usage Guide
+
+### Complete Workflow
+
+#### 1. Developer Workflow
+```bash
+# Make changes to application code
+vim app/app.py
+
+# Commit and push
+git add .
+git commit -m "Updated application feature"
+git push origin main
+```
+
+#### 2. Automated CI/CD Flow
+1. **Jenkins Pipeline Triggers:**
+   - Detects Git push via webhook/polling
+   - Builds new Docker image
+   - Tags with build number
+   - Pushes to DockerHub
+   - Updates Kubernetes manifests
+   - Pushes manifest changes to Git
+
+2. **ArgoCD Deployment:**
+   - Detects manifest changes in Git
+   - Syncs with Kubernetes cluster
+   - Deploys new version with rolling update
+   - Self-heals if manual changes occur
+
+#### 3. Verify Deployment
+```bash
+# Check pods
+kubectl get pods -n ivolve
+
+# Check service
+kubectl get svc -n ivolve
+
+# View logs
+kubectl logs -f deployment/ivolve-web -n ivolve
+
+# Check ArgoCD sync status
+kubectl get application ivolve-app -n argocd
+```
+
+### Accessing the Application
+
+#### Local (Minikube)
+```bash
+minikube service ivolve-svc -n ivolve
+```
+
+#### AWS (EKS)
+```bash
+# Get LoadBalancer URL
+kubectl get svc ivolve-svc -n ivolve -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+```
+
+### Manual Deployment
+
+#### Build and Deploy Manually
+```bash
+# Build image
+docker build -t YOUR_DOCKERHUB_USERNAME/ivolve:manual .
+
+# Push image
+docker push YOUR_DOCKERHUB_USERNAME/ivolve:manual
+
+# Update deployment
+kubectl set image deployment/ivolve-web ivolve=YOUR_DOCKERHUB_USERNAME/ivolve:manual -n ivolve
+
+# Verify rollout
+kubectl rollout status deployment/ivolve-web -n ivolve
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### 1. Docker Build Fails
+**Problem:** Docker build fails with dependency errors
+
+**Solution:**
+```bash
+# Clear Docker cache
+docker system prune -a
+
+# Rebuild with no cache
+docker build --no-cache -t ivolve-app:latest .
+
+# Check Dockerfile syntax
+docker build --progress=plain -t ivolve-app:latest .
+```
+
+#### 2. Kubernetes Pods Not Starting
+**Problem:** Pods stuck in ImagePullBackOff
+
+**Solution:**
+```bash
+# Check pod events
+kubectl describe pod POD_NAME -n ivolve
+
+# Verify image exists in DockerHub
+docker pull YOUR_DOCKERHUB_USERNAME/ivolve:latest
+
+# Check image name in deployment.yaml
+kubectl get deployment ivolve-web -n ivolve -o yaml | grep image:
+
+# Update with correct image
+kubectl set image deployment/ivolve-web ivolve=YOUR_DOCKERHUB_USERNAME/ivolve:latest -n ivolve
+```
+
+#### 3. Jenkins Pipeline Fails
+**Problem:** Pipeline fails at push stage
+
+**Solution:**
+```bash
+# Verify DockerHub credentials in Jenkins
+# Credentials → System → Global credentials → dockerhub-token
+
+# Test Docker login manually on Jenkins server
+docker login -u YOUR_DOCKERHUB_USERNAME
+
+# Check Jenkins logs
+tail -f /var/log/jenkins/jenkins.log
+```
+
+#### 4. ArgoCD Not Syncing
+**Problem:** Application out of sync but not deploying
+
+**Solution:**
+```bash
+# Force sync
+kubectl patch application ivolve-app -n argocd --type merge -p '{"operation":{"sync":{}}}'
+
+# Check ArgoCD logs
+kubectl logs -n argocd deployment/argocd-application-controller
+
+# Verify repository credentials
+kubectl get secret -n argocd
+
+# Refresh application
+argocd app get ivolve-app --refresh
+```
+
+#### 5. Terraform Apply Fails
+**Problem:** Terraform fails with state lock error
+
+**Solution:**
+```bash
+# Force unlock (use carefully)
+terraform force-unlock LOCK_ID
+
+# Or delete state lock from DynamoDB
+aws dynamodb delete-item --table-name terraform-locks --key '{"LockID":{"S":"LOCK_ID"}}'
+
+# Reinitialize
+terraform init -reconfigure
+```
+
+#### 6. Ansible Playbook Fails
+**Problem:** Cannot connect to EC2 instances
+
+**Solution:**
+```bash
+# Verify SSH key permissions
+chmod 400 ~/.ssh/your-key.pem
+
+# Test SSH connection manually
+ssh -i ~/.ssh/your-key.pem ubuntu@EC2_IP
+
+# Check AWS credentials
+aws sts get-caller-identity
+
+# Verify dynamic inventory
+ansible-inventory -i inventory/aws_ec2.yaml --graph
+```
+
+#### 7. Application Not Accessible
+**Problem:** Cannot access application via browser
+
+**Solution:**
+```bash
+# Check service type and external IP
+kubectl get svc -n ivolve
+
+# For LoadBalancer type, wait for external IP
+kubectl get svc ivolve-svc -n ivolve -w
+
+# Check security groups allow traffic on port 80
+aws ec2 describe-security-groups --group-ids sg-xxxxx
+
+# For Minikube, use tunnel
+minikube tunnel
+```
+
+### Debugging Commands
+
+#### Docker
+```bash
+# View running containers
+docker ps
+
+# Check logs
+docker logs CONTAINER_ID
+
+# Inspect container
+docker inspect CONTAINER_ID
+
+# Execute command in container
+docker exec -it CONTAINER_ID /bin/bash
+```
+
+#### Kubernetes
+```bash
+# Get all resources in namespace
+kubectl get all -n ivolve
+
+# Describe resource
+kubectl describe pod POD_NAME -n ivolve
+
+# View logs
+kubectl logs POD_NAME -n ivolve
+
+# Get events
+kubectl get events -n ivolve --sort-by='.lastTimestamp'
+
+# Port forward for local testing
+kubectl port-forward pod/POD_NAME 5000:5000 -n ivolve
+```
+
+#### Jenkins
+```bash
+# Restart Jenkins
+sudo systemctl restart jenkins
+
+# Check status
+sudo systemctl status jenkins
+
+# View logs
+sudo journalctl -u jenkins -f
+```
+
+#### ArgoCD
+```bash
+# Get application details
+kubectl get application -n argocd
+
+# Describe application
+kubectl describe application ivolve-app -n argocd
+
+# Check sync status
+kubectl get application ivolve-app -n argocd -o jsonpath='{.status.sync.status}'
+```
+
+---
+
+## Maintenance and Best Practices
+
+### Security Recommendations
+- Rotate AWS credentials regularly
+- Use IAM roles instead of access keys where possible
+- Enable MFA for AWS root account
+- Store sensitive data in AWS Secrets Manager
+- Use RBAC in Kubernetes
+- Scan Docker images for vulnerabilities (Trivy)
+
+### Monitoring
+- Configure CloudWatch alarms for EC2 metrics
+- Set up Kubernetes monitoring with Prometheus/Grafana
+- Enable ArgoCD notifications
+- Monitor Jenkins build metrics
+
+### Backup Strategy
+- Backup Terraform state file
+- Export Jenkins configuration
+- Backup Kubernetes manifests
+- Document manual configuration changes
+
+### Scaling Considerations
+- Increase replica count in deployment.yaml
+- Use Horizontal Pod Autoscaler (HPA)
+- Configure cluster autoscaling for EKS
+- Optimize Docker image size
+
+---
+
+## Additional Resources
+
+### Documentation Links
+- [Docker Documentation](https://docs.docker.com/)
+- [Kubernetes Documentation](https://kubernetes.io/docs/)
+- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [Ansible Documentation](https://docs.ansible.com/)
+- [Jenkins Pipeline Syntax](https://www.jenkins.io/doc/book/pipeline/syntax/)
+- [ArgoCD Documentation](https://argo-cd.readthedocs.io/)
+
+### Useful Commands Reference
+
+#### Quick Start Commands
+```bash
+# Complete deployment
+terraform apply -auto-approve
+ansible-playbook -i inventory/aws_ec2.yaml playbook.yaml
+kubectl apply -f kubernetes/
+kubectl apply -f argocd/application.yaml
+
+# Status check
+kubectl get all -n ivolve
+kubectl get application -n argocd
+
+# Cleanup
+kubectl delete namespace ivolve
+terraform destroy -auto-approve
+```
+
+---
+
+## Project Contributors
+
+**Graduation Project**  
+**Program:** Cloud & DevOps Engineering  
+**Organization:** iVolve & NTI
+
+---
+
+## License
+
+This project is created for educational purposes as part of the iVolve Cloud & DevOps graduation project.
+
+---
+
