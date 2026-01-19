@@ -4,9 +4,8 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "omarredaa/final-app"
-        IMAGE_TAG  = "v1"
-
+        IMAGE_NAME   = "omarredaa/final-app"
+        IMAGE_TAG    = "v1"
         MANIFEST_REPO = "https://github.com/OMAR-BESHIR/k8s-manifests.git"
     }
 
@@ -69,7 +68,7 @@ pipeline {
 
         stage('Push Manifests') {
             steps {
-                echo "Kubernetes manifests updated and pushed successfully"
+                echo "Kubernetes manifests updated and pushed successfully "
             }
         }
     }
