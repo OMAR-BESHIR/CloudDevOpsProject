@@ -1,0 +1,590 @@
+# Terraform - Infrastructure Provisioning Documentation
+
+## Overview
+Terraform is used to provision and manage AWS infrastructure as code (IaC). This setup creates a complete AWS environment including VPC, subnets, EC2 instance for Jenkins, and CloudWatch monitoring with modular architecture for better maintainability.
+
+---
+
+## Project Structure
+```
+terraform/
+├── main.tf
+├── provider.tf
+├── variables.tf
+├── outputs.tf
+├── backend.tf
+└── modules/
+    ├── network/
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── outputs.tf
+    └── server/
+        ├── main.tf
+        ├── variables.tf
+        ├── outputs.tf
+        └── user_data.sh
+```
+
+---
+
+## Root Configuration Files
+
+### 1. Provider Configuration
+**File:** `provider.tf`
+
+```hcl
+provider "aws" {
+  region = var.aws_region
+}
+```
+
+**Purpose:** Configures AWS as the cloud provider with specified region.
+
+---
+
+### 2. Backend Configuration
+**File:** `backend.tf`
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket = "ivolve-project1645356121"
+    key    = "clouddevopsproject/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+```
+
+**Purpose:** Stores Terraform state file remotely in S3 bucket for:
+- **State Management:** Centralized state storage
+- **Team Collaboration:** Multiple users can work together
+- **State Locking:** Prevents concurrent modifications
+
+---
+
+### 3. Variables Definition
+**File:** `variables.tf`
+
+```hcl
+variable "aws_region" {
+  default = "us-east-1"
+}
+
+variable "vpc_cidr" {
+  default = "10.0.0.0/16"
+}
+
+variable "public_subnets" {
+  default = ["10.0.1.0/24", "10.0.2.0/24"]
+}
+
+variable "availability_zones" {
+  type    = list(string)
+  default = ["us-east-1a", "us-east-1b"]
+}
+
+variable "instance_type" {
+  default = "t3.micro"
+}
+
+variable "key_name" {
+  default = "jenkins-key"
+}
+```
+
+**Key Variables:**
+
+| Variable | Default Value | Description |
+|----------|---------------|-------------|
+| `aws_region` | us-east-1 | AWS region for resources |
+| `vpc_cidr` | 10.0.0.0/16 | VPC CIDR block |
+| `public_subnets` | 10.0.1.0/24, 10.0.2.0/24 | Public subnet CIDR blocks |
+| `availability_zones` | us-east-1a, us-east-1b | AZs for high availability |
+| `instance_type` | t3.micro | EC2 instance type |
+| `key_name` | jenkins-key | SSH key pair name |
+
+---
+
+### 4. Main Configuration
+**File:** `main.tf`
+
+```hcl
+module "network" {
+  source             = "./modules/network"
+  vpc_cidr           = var.vpc_cidr
+  public_subnets     = var.public_subnets
+  availability_zones = var.availability_zones
+}
+
+module "jenkins_server" {
+  source        = "./modules/server"
+  vpc_id        = module.network.vpc_id
+  subnet_id     = module.network.public_subnet_ids[0]
+  instance_type = var.instance_type
+  key_name      = var.key_name
+}
+```
+
+**Purpose:** Orchestrates modules and passes variables between them.
+
+---
+
+### 5. Outputs
+**File:** `outputs.tf`
+
+```hcl
+output "jenkins_public_ip" {
+  value = module.jenkins_server.public_ip
+}
+```
+
+**Purpose:** Displays Jenkins server public IP after deployment.
+
+---
+
+## Module 1: Network Module
+
+### Network Module - Main Configuration
+**File:** `modules/network/main.tf`
+
+```hcl
+# VPC
+resource "aws_vpc" "my-vpc" {
+  cidr_block = var.vpc_cidr
+  tags = {
+    Name = "jenkins-vpc"
+  }
+}
+
+# Public Subnets
+resource "aws_subnet" "public_subnets" {
+  count                   = length(var.public_subnets)
+  vpc_id                  = aws_vpc.my-vpc.id
+  cidr_block              = var.public_subnets[count.index]
+  map_public_ip_on_launch = true
+  availability_zone       = var.availability_zones[count.index]
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "IGW" {
+  vpc_id = aws_vpc.my-vpc.id
+  tags = {
+    Name = "jenkins-igw"
+  }
+}
+
+# Route Table
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.my-vpc.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.IGW.id
+  }
+}
+
+# Route Table Association
+resource "aws_route_table_association" "public" {
+  count          = length(aws_subnet.public_subnets)
+  subnet_id      = aws_subnet.public_subnets[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+# Network ACL
+resource "aws_network_acl" "NACL" {
+  vpc_id = aws_vpc.my-vpc.id
+  
+  egress {
+    protocol   = "-1"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+  }
+  
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
+  }
+  
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 110
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 8080
+    to_port    = 8080
+  }
+  
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 120
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 22
+    to_port    = 22
+  }
+  
+  tags = {
+    Name = "main"
+  }
+}
+```
+
+**Components Created:**
+- VPC with custom CIDR block
+- 2 Public Subnets across different AZs
+- Internet Gateway for internet access
+- Route Table with internet route
+- Network ACL for subnet-level security
+
+---
+
+## Module 2: Server Module
+
+### Server Module - Main Configuration
+**File:** `modules/server/main.tf`
+
+```hcl
+# Get Latest Ubuntu AMI
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"]
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
+  }
+}
+
+# Security Group
+resource "aws_security_group" "jenkins_sg" {
+  vpc_id = var.vpc_id
+  
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# EC2 Instance
+resource "aws_instance" "jenkins_server" {
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = var.instance_type
+  subnet_id                   = var.subnet_id
+  vpc_security_group_ids      = [aws_security_group.jenkins_sg.id]
+  associate_public_ip_address = true
+  key_name                    = var.key_name
+  user_data                   = file("${path.module}/user_data.sh")
+  
+  tags = {
+    Name = "Jenkins-Server"
+  }
+}
+
+# SNS Topic for Alerts
+resource "aws_sns_topic" "user_updates" {
+  name = "jenkins-cpu-alerts"
+}
+
+# SNS Email Subscription
+resource "aws_sns_topic_subscription" "user_updates_sqs_target" {
+  topic_arn = aws_sns_topic.user_updates.arn
+  protocol  = "email"
+  endpoint  = "obeshir306@gmail.com"
+}
+
+# CloudWatch CPU Alarm
+resource "aws_cloudwatch_metric_alarm" "cpu_alarm" {
+  alarm_name                = "jenkins-cpu-high"
+  comparison_operator       = "GreaterThanOrEqualToThreshold"
+  evaluation_periods        = 2
+  metric_name               = "CPUUtilization"
+  namespace                 = "AWS/EC2"
+  period                    = 120
+  statistic                 = "Average"
+  threshold                 = 80
+  alarm_description         = "This metric monitors ec2 cpu utilization"
+  alarm_actions             = [aws_sns_topic.user_updates.arn]
+  ok_actions                = [aws_sns_topic.user_updates.arn]
+  
+  dimensions = {
+    InstanceId = aws_instance.jenkins_server.id
+  }
+}
+```
+
+**Components Created:**
+- EC2 Instance with Ubuntu 20.04
+- Security Group (SSH + Jenkins ports)
+- SNS Topic for CloudWatch alerts
+- Email subscription for notifications
+- CloudWatch alarm for CPU monitoring
+
+---
+
+### User Data Script
+**File:** `modules/server/user_data.sh`
+
+```bash
+#!/bin/bash
+set -e
+
+# Update system
+apt-get update -y
+
+# Install Java (Jenkins requirement)
+apt-get install -y openjdk-17-jdk
+
+# Add Jenkins repository & key
+curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key \
+  | tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+
+echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
+  https://pkg.jenkins.io/debian-stable binary/ \
+  | tee /etc/apt/sources.list.d/jenkins.list > /dev/null
+
+# Install Jenkins
+apt-get update -y
+apt-get install -y jenkins
+
+# Start & enable Jenkins
+systemctl enable jenkins
+systemctl start jenkins
+```
+
+**Purpose:** Automatically installs and configures Jenkins on EC2 instance launch.
+
+---
+
+## Deployment Steps
+
+### Prerequisites
+```bash
+# Install Terraform
+# Download from: https://www.terraform.io/downloads
+
+# Verify installation
+terraform version
+
+# Configure AWS credentials
+aws configure
+```
+
+### Step 1: Initialize Terraform
+```bash
+cd terraform/
+terraform init
+```
+
+**This will:**
+- Download AWS provider
+- Initialize backend (S3)
+- Prepare working directory
+
+### Step 2: Validate Configuration
+```bash
+terraform validate
+```
+
+### Step 3: Plan Infrastructure
+```bash
+terraform plan
+```
+
+**Review:**
+- Resources to be created
+- Estimated costs
+- Configuration accuracy
+
+### Step 4: Apply Configuration
+```bash
+terraform apply
+```
+
+**Enter `yes` when prompted.**
+
+### Step 5: Get Outputs
+```bash
+terraform output jenkins_public_ip
+```
+
+### Step 6: Access Jenkins
+```bash
+# Wait 3-5 minutes for Jenkins to start
+# Access Jenkins at:
+http://<jenkins_public_ip>:8080
+
+# Get initial admin password from EC2:
+ssh -i jenkins-key.pem ubuntu@<jenkins_public_ip>
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+```
+
+---
+
+## Useful Terraform Commands
+
+### View Current State
+```bash
+terraform show
+```
+
+### List Resources
+```bash
+terraform state list
+```
+
+### Update Infrastructure
+```bash
+# After modifying .tf files
+terraform plan
+terraform apply
+```
+
+### Destroy Infrastructure
+```bash
+terraform destroy
+```
+
+### Format Code
+```bash
+terraform fmt -recursive
+```
+
+### Import Existing Resources
+```bash
+terraform import aws_instance.jenkins_server i-1234567890abcdef0
+```
+
+---
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    AWS Cloud                        │
+│                                                     │
+│  ┌───────────────────────────────────────────────┐ │
+│  │          VPC (10.0.0.0/16)                    │ │
+│  │                                               │ │
+│  │  ┌──────────────────┐  ┌──────────────────┐  │ │
+│  │  │ Public Subnet 1  │  │ Public Subnet 2  │  │ │
+│  │  │  10.0.1.0/24     │  │  10.0.2.0/24     │  │ │
+│  │  │   (us-east-1a)   │  │   (us-east-1b)   │  │ │
+│  │  │                  │  │                  │  │ │
+│  │  │  ┌────────────┐  │  │                  │  │ │
+│  │  │  │  Jenkins   │  │  │                  │  │ │
+│  │  │  │  Server    │  │  │                  │  │ │
+│  │  │  │  (t3.micro)│  │  │                  │  │ │
+│  │  │  └─────┬──────┘  │  │                  │  │ │
+│  │  │        │         │  │                  │  │ │
+│  │  └────────┼─────────┘  └──────────────────┘  │ │
+│  │           │                                   │ │
+│  │  ┌────────▼─────────┐                        │ │
+│  │  │ Internet Gateway │                        │ │
+│  │  └──────────────────┘                        │ │
+│  └───────────────────────────────────────────────┘ │
+│                                                     │
+│  ┌───────────────────────────────────────────────┐ │
+│  │            CloudWatch Monitoring              │ │
+│  │  - CPU Utilization Alarm (>80%)               │ │
+│  │  - SNS Email Notifications                    │ │
+│  └───────────────────────────────────────────────┘ │
+│                                                     │
+│  ┌───────────────────────────────────────────────┐ │
+│  │         S3 Backend (State Storage)            │ │
+│  │  Bucket: ivolve-project1645356121             │ │
+│  └───────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## Best Practices Applied
+
+✅ **Modular Architecture:** Separate network and server modules  
+✅ **Remote State:** S3 backend for state management  
+✅ **High Availability:** Multi-AZ subnet deployment  
+✅ **Monitoring:** CloudWatch alarms with SNS notifications  
+✅ **Security:** Security groups and Network ACLs  
+✅ **Automation:** User data script for Jenkins installation  
+✅ **Variables:** Parameterized configuration for flexibility
+
+---
+
+## Security Considerations
+
+⚠️ **Security Groups:** Currently open to 0.0.0.0/0 - restrict to specific IPs in production  
+⚠️ **SSH Key:** Ensure jenkins-key.pem is securely stored  
+⚠️ **Email Endpoint:** Update SNS subscription email before deployment  
+⚠️ **State File:** S3 bucket should have versioning enabled  
+⚠️ **HTTPS:** Consider using ALB with SSL for Jenkins in production
+
+---
+
+## Cost Optimization Tips
+
+💰 Use t3.micro for Jenkins (Free tier eligible)  
+💰 Enable S3 bucket lifecycle policies  
+💰 Use CloudWatch log retention policies  
+💰 Stop EC2 instances when not in use  
+💰 Use Spot instances for non-production environments
+
+---
+
+## Troubleshooting
+
+### Issue: Terraform init fails
+```bash
+# Clear cache and reinitialize
+rm -rf .terraform
+terraform init
+```
+
+### Issue: State lock error
+```bash
+# Force unlock (use carefully)
+terraform force-unlock <LOCK_ID>
+```
+
+### Issue: Jenkins not accessible
+```bash
+# Check instance status
+aws ec2 describe-instances --instance-ids <instance-id>
+
+# Check security group rules
+aws ec2 describe-security-groups --group-ids <sg-id>
+
+# SSH into instance and check Jenkins
+ssh -i jenkins-key.pem ubuntu@<public-ip>
+sudo systemctl status jenkins
+```
+
+---
+
+## Additional Notes
+
+📝 Ensure AWS credentials are configured before running Terraform  
+📝 S3 bucket must exist before initializing backend  
+📝 SSH key pair must be created in AWS before deployment  
+📝 Jenkins takes 3-5 minutes to fully start after instance launch  
+📝 Remember to confirm SNS email subscription after first apply

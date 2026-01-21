@@ -1,0 +1,499 @@
+# Jenkins - Continuous Integration Documentation
+
+## Overview
+Jenkins is used to automate the CI/CD pipeline, including building Docker images, scanning for vulnerabilities, pushing to DockerHub, and updating Kubernetes manifests. The pipeline uses a shared library for reusable functions to maintain clean and modular code.
+
+---
+
+## Project Structure
+```
+jenkins/
+├── Jenkinsfile
+└── vars/
+    ├── dockerBuild.groovy
+    ├── trivyScan.groovy
+    ├── dockerPush.groovy
+    ├── deleteLocalImage.groovy
+    └── updateK8sManifests.groovy
+```
+
+---
+
+## Jenkinsfile Configuration
+
+### Pipeline Overview
+**File:** `Jenkinsfile`
+
+```groovy
+@Library('clouddevops-shared-lib@main')_
+
+pipeline {
+    agent any
+    
+    environment {
+        IMAGE_NAME   = "omarredaa/final-app"
+        IMAGE_TAG    = "v1"
+        MANIFEST_REPO = "https://github.com/OMAR-BESHIR/k8s-manifests.git"
+    }
+    
+    stages {
+        stage('Build Image') {
+            steps {
+                dockerBuild(IMAGE_NAME, IMAGE_TAG)
+            }
+        }
+        
+        stage('Scan Image') {
+            steps {
+                trivyScan("${IMAGE_NAME}:${IMAGE_TAG}")
+            }
+        }
+        
+        stage('Push Image') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )
+                ]) {
+                    dockerPush(
+                        IMAGE_NAME,
+                        IMAGE_TAG,
+                        env.DOCKER_USER,
+                        env.DOCKER_PASS
+                    )
+                }
+            }
+        }
+        
+        stage('Delete Image Locally') {
+            steps {
+                deleteLocalImage(IMAGE_NAME, IMAGE_TAG)
+            }
+        }
+        
+        stage('Update Manifests') {
+            steps {
+                withCredentials([
+                    string(
+                        credentialsId: 'github-token',
+                        variable: 'GIT_TOKEN'
+                    )
+                ]) {
+                    updateK8sManifests(
+                        MANIFEST_REPO,
+                        IMAGE_NAME,
+                        IMAGE_TAG,
+                        env.GIT_TOKEN
+                    )
+                }
+            }
+        }
+        
+        stage('Push Manifests') {
+            steps {
+                echo "Kubernetes manifests updated and pushed successfully"
+            }
+        }
+    }
+}
+```
+
+### Pipeline Stages Explanation
+
+| Stage | Purpose | Description |
+|-------|---------|-------------|
+| **Build Image** | Create Docker image | Builds application Docker image from Dockerfile |
+| **Scan Image** | Security scanning | Scans image for vulnerabilities using Trivy |
+| **Push Image** | Upload to registry | Pushes image to DockerHub |
+| **Delete Image Locally** | Clean up | Removes local image to save disk space |
+| **Update Manifests** | GitOps update | Updates Kubernetes deployment manifest with new image |
+| **Push Manifests** | Confirmation | Confirms manifests were pushed successfully |
+
+---
+
+## Shared Library Functions
+
+### 1. Docker Build Function
+**File:** `vars/dockerBuild.groovy`
+
+```groovy
+def call(String imageName, String tag) {
+    sh """
+    docker build -t ${imageName}:${tag} .
+    """
+}
+```
+
+**Purpose:** Builds Docker image from Dockerfile in current directory.
+
+**Parameters:**
+- `imageName`: Docker image name (e.g., omarredaa/final-app)
+- `tag`: Image tag version (e.g., v1)
+
+---
+
+### 2. Trivy Security Scan Function
+**File:** `vars/trivyScan.groovy`
+
+```groovy
+def call(String image) {
+    sh """
+    trivy image --exit-code 0 --severity HIGH,CRITICAL ${image}
+    """
+}
+```
+
+**Purpose:** Scans Docker image for security vulnerabilities.
+
+**Parameters:**
+- `image`: Full image name with tag (e.g., omarredaa/final-app:v1)
+
+**Features:**
+- Checks for HIGH and CRITICAL vulnerabilities
+- `--exit-code 0`: Doesn't fail the build even if vulnerabilities found
+- Generates security report
+
+---
+
+### 3. Docker Push Function
+**File:** `vars/dockerPush.groovy`
+
+```groovy
+def call(String imageName, String tag, String user, String pass) {
+    sh """
+      echo '${pass}' | docker login -u '${user}' --password-stdin
+      docker push ${imageName}:${tag}
+      docker logout
+    """
+}
+```
+
+**Purpose:** Authenticates and pushes image to DockerHub.
+
+**Parameters:**
+- `imageName`: Docker image name
+- `tag`: Image tag
+- `user`: DockerHub username
+- `pass`: DockerHub password
+
+**Security:** Uses password-stdin for secure authentication.
+
+---
+
+### 4. Delete Local Image Function
+**File:** `vars/deleteLocalImage.groovy`
+
+```groovy
+def call(String imageName, String tag) {
+    sh """
+    docker rmi ${imageName}:${tag} || true
+    """
+}
+```
+
+**Purpose:** Removes Docker image from Jenkins server to free disk space.
+
+**Parameters:**
+- `imageName`: Docker image name
+- `tag`: Image tag
+
+**Note:** `|| true` ensures the pipeline doesn't fail if image doesn't exist.
+
+---
+
+### 5. Update Kubernetes Manifests Function
+**File:** `vars/updateK8sManifests.groovy`
+
+```groovy
+def call(String repoUrl, String imageName, String tag, String gitToken) {
+    sh """
+      rm -rf manifests
+      git clone https://${gitToken}@github.com/OMAR-BESHIR/k8s-manifests.git manifests
+      cd manifests
+      sed -i 's|image: .*|image: ${imageName}:${tag}|' deployment.yml
+      git config user.email "jenkins@local"
+      git config user.name "jenkins"
+      git add .
+      git commit -m "Update image to ${imageName}:${tag}" || echo "No changes to commit"
+      git push origin main
+    """
+}
+```
+
+**Purpose:** Updates Kubernetes deployment manifest with new image version (GitOps approach).
+
+**Parameters:**
+- `repoUrl`: Git repository URL for manifests
+- `imageName`: Docker image name
+- `tag`: New image tag
+- `gitToken`: GitHub personal access token
+
+**Process:**
+1. Clones manifest repository
+2. Updates image tag in deployment.yml
+3. Commits and pushes changes
+4. ArgoCD detects changes and deploys automatically
+
+---
+
+## Setup Instructions
+
+### Prerequisites
+1. Jenkins server installed and running
+2. Docker installed on Jenkins server
+3. Trivy installed for security scanning
+4. Git installed on Jenkins server
+
+### Step 1: Install Required Jenkins Plugins
+```bash
+# Navigate to: Manage Jenkins → Plugin Manager → Available Plugins
+# Install the following plugins:
+- Pipeline
+- Docker Pipeline
+- Git Plugin
+- Credentials Binding
+- GitHub Integration
+```
+
+### Step 2: Configure Shared Library
+
+**Navigate to:** `Manage Jenkins → System → Global Pipeline Libraries`
+
+**Add Library:**
+- Name: `clouddevops-shared-lib`
+- Default version: `main`
+- Retrieval method: `Modern SCM`
+- Source Code Management: `Git`
+- Project Repository: `https://github.com/OMAR-BESHIR/jenkins-shared-library.git`
+
+### Step 3: Add Credentials
+
+#### DockerHub Credentials
+1. Navigate to: `Manage Jenkins → Credentials → System → Global credentials`
+2. Click: `Add Credentials`
+3. Kind: `Username with password`
+4. ID: `dockerhub-creds`
+5. Username: Your DockerHub username
+6. Password: Your DockerHub password
+
+#### GitHub Token
+1. Navigate to: `Manage Jenkins → Credentials → System → Global credentials`
+2. Click: `Add Credentials`
+3. Kind: `Secret text`
+4. Secret: Your GitHub Personal Access Token
+5. ID: `github-token`
+
+### Step 4: Install Trivy on Jenkins Server
+
+```bash
+# SSH into Jenkins server
+ssh user@jenkins-server
+
+# Install Trivy (Ubuntu/Debian)
+sudo apt-get install wget apt-transport-https gnupg lsb-release
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+sudo apt-get update
+sudo apt-get install trivy
+
+# Verify installation
+trivy --version
+```
+
+### Step 5: Create Jenkins Pipeline Job
+
+1. Click: `New Item`
+2. Enter name: `CloudDevOps-Pipeline`
+3. Select: `Pipeline`
+4. Under Pipeline section:
+   - Definition: `Pipeline script from SCM`
+   - SCM: `Git`
+   - Repository URL: Your GitHub repository URL
+   - Branch: `*/main`
+   - Script Path: `Jenkinsfile`
+5. Click: `Save`
+
+### Step 6: Run Pipeline
+
+```bash
+# Click "Build Now" in Jenkins UI
+# Or trigger via webhook/commit
+```
+
+---
+
+## Pipeline Workflow Diagram
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Jenkins Pipeline                     │
+└─────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌───────────────────────────────────────────────────────┐
+│ Stage 1: Build Image                                  │
+│ • docker build -t omarredaa/final-app:v1 .           │
+└───────────────┬───────────────────────────────────────┘
+                │
+                ▼
+┌───────────────────────────────────────────────────────┐
+│ Stage 2: Scan Image                                   │
+│ • trivy image --severity HIGH,CRITICAL                │
+└───────────────┬───────────────────────────────────────┘
+                │
+                ▼
+┌───────────────────────────────────────────────────────┐
+│ Stage 3: Push Image                                   │
+│ • docker login                                        │
+│ • docker push omarredaa/final-app:v1                 │
+│ • docker logout                                       │
+└───────────────┬───────────────────────────────────────┘
+                │
+                ▼
+┌───────────────────────────────────────────────────────┐
+│ Stage 4: Delete Local Image                          │
+│ • docker rmi omarredaa/final-app:v1                  │
+└───────────────┬───────────────────────────────────────┘
+                │
+                ▼
+┌───────────────────────────────────────────────────────┐
+│ Stage 5: Update Manifests                             │
+│ • Clone k8s-manifests repo                           │
+│ • Update deployment.yml with new image               │
+│ • Commit and push changes                            │
+└───────────────┬───────────────────────────────────────┘
+                │
+                ▼
+┌───────────────────────────────────────────────────────┐
+│ Stage 6: Confirmation                                 │
+│ • Echo success message                                │
+└───────────────────────────────────────────────────────┘
+                │
+                ▼
+        ┌───────────────┐
+        │    ArgoCD     │
+        │ Auto-deploys  │
+        └───────────────┘
+```
+
+---
+
+## Useful Jenkins Commands
+
+### View Build Logs
+```bash
+# Access Jenkins server
+ssh user@jenkins-server
+
+# View specific job logs
+cat /var/lib/jenkins/jobs/CloudDevOps-Pipeline/builds/<build-number>/log
+```
+
+### Restart Jenkins
+```bash
+sudo systemctl restart jenkins
+```
+
+### Check Jenkins Status
+```bash
+sudo systemctl status jenkins
+```
+
+### View Jenkins Disk Usage
+```bash
+du -sh /var/lib/jenkins/workspace/*
+```
+
+### Clean Old Builds
+```bash
+# Navigate to: Job → Configure → Discard old builds
+# Set: Max # of builds to keep: 10
+```
+
+---
+
+## Troubleshooting
+
+### Issue: Docker Permission Denied
+```bash
+# Add jenkins user to docker group
+sudo usermod -aG docker jenkins
+sudo systemctl restart jenkins
+```
+
+### Issue: Git Authentication Failed
+```bash
+# Verify GitHub token has correct permissions:
+# - repo (Full control)
+# - workflow
+# Regenerate token if needed
+```
+
+### Issue: Trivy Command Not Found
+```bash
+# Install Trivy on Jenkins server
+# Verify PATH includes Trivy location
+which trivy
+```
+
+### Issue: Pipeline Fails at Build Stage
+```bash
+# Check Dockerfile exists in repository root
+# Verify Docker daemon is running
+sudo systemctl status docker
+```
+
+### Issue: Manifest Update Fails
+```bash
+# Verify GitHub token is valid
+# Check deployment.yml exists in manifest repo
+# Ensure correct file name (deployment.yml not deployment.yaml)
+```
+
+---
+
+## Best Practices Applied
+
+✅ **Shared Library:** Reusable functions across multiple pipelines  
+✅ **Security Scanning:** Trivy integration for vulnerability detection  
+✅ **Credentials Management:** Secure storage of DockerHub and GitHub credentials  
+✅ **GitOps Approach:** Manifest updates trigger automated deployment  
+✅ **Clean Environment:** Local images removed after push  
+✅ **Error Handling:** Pipeline doesn't fail on expected errors
+
+---
+
+## Security Considerations
+
+🔒 **Never hardcode credentials** - Use Jenkins credentials store  
+🔒 **Use least privilege** - Grant minimal permissions to tokens  
+🔒 **Secure Jenkins** - Enable CSRF protection and authentication  
+🔒 **Regular updates** - Keep Jenkins and plugins up to date  
+🔒 **Audit logs** - Monitor pipeline execution logs  
+🔒 **Image scanning** - Always scan images before deployment
+
+---
+
+## Additional Notes
+
+📝 Shared library must be in separate repository  
+📝 GitHub token needs repo and workflow permissions  
+📝 DockerHub credentials must be valid  
+📝 Trivy must be installed on Jenkins server  
+📝 Pipeline can be triggered by webhooks for automated CI/CD  
+📝 Consider using Jenkins agents/slaves for parallel builds
+
+---
+
+## Integration with ArgoCD
+
+After this pipeline completes:
+1. Updated manifests pushed to GitHub
+2. ArgoCD detects changes in manifest repository
+3. ArgoCD automatically syncs and deploys to Kubernetes
+4. New application version is running in cluster
+
+This completes the full CI/CD cycle! 

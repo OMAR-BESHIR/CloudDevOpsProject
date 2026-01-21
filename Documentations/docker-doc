@@ -1,104 +1,98 @@
-# Docker - Containerization Documentation
+Docker – Containerization Documentation
+Overview
 
-## Overview
-تم استخدام Docker لعمل containerization للـ Python application عشان نضمن إن الـ application يشتغل بنفس الطريقة في أي environment.
+Docker is used to containerize the Python application to ensure consistent behavior across different environments.
+By using Docker, the application can run the same way on any machine without dependency or environment issues.
 
-## Files Structure
-```
+Project File Structure
 .
 ├── Dockerfile
 ├── app.py
 └── requirements.txt
-```
 
-## Dockerfile Explanation
-
-### Base Image
-```dockerfile
+Dockerfile Explanation
+Base Image
 FROM python:3.10-slim
-```
-- استخدمنا `python:3.10-slim` كـ base image
-- الـ slim version أخف وأصغر في الحجم من الـ full image
 
-### Working Directory
-```dockerfile
+
+Uses python:3.10-slim as the base image.
+
+The slim version is lightweight and smaller in size compared to the full Python image.
+
+Working Directory
 WORKDIR /app
-```
-- بنحدد `/app` كـ working directory جوا الـ container
 
-### Dependencies Installation
-```dockerfile
+
+Sets /app as the working directory inside the container.
+
+Dependencies Installation
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-```
-- بننسخ ملف الـ `requirements.txt` الأول
-- بنستخدم `--no-cache-dir` عشان نقلل حجم الـ image
 
-### Application Files
-```dockerfile
+
+Copies requirements.txt first to take advantage of Docker layer caching.
+
+Uses --no-cache-dir to reduce the final image size.
+
+Application Files
 COPY . .
-```
-- بننسخ كل ملفات الـ application جوا الـ container
 
-### Port & Command
-```dockerfile
+
+Copies all application files into the container.
+
+Port & Startup Command
 EXPOSE 5000
 CMD ["python", "app.py"]
-```
-- بنفتح الـ port 5000 للـ application
-- بنشغل الـ application باستخدام Python
 
-## How to Build & Run
 
-### 1. Build the Docker Image
-```bash
+Exposes port 5000 for the application.
+
+Runs the application using Python.
+
+How to Build and Run the Application
+1. Build the Docker Image
 docker build -t my-python-app:latest .
-```
 
-### 2. Run the Container
-```bash
+2. Run the Docker Container
 docker run -d -p 5000:5000 --name my-app my-python-app:latest
-```
 
-### 3. Verify the Container is Running
-```bash
+
+Runs the container in detached mode.
+
+Maps port 5000 from the container to the host.
+
+3. Verify the Container is Running
 docker ps
-```
 
-### 4. Test the Application
-```bash
+4. Test the Application
 curl http://localhost:5000
-```
 
-### 5. View Container Logs
-```bash
+5. View Container Logs
 docker logs my-app
-```
 
-### 6. Stop & Remove Container
-```bash
+6. Stop and Remove the Container
 docker stop my-app
 docker rm my-app
-```
 
-## Docker Commands Summary
+Docker Commands Summary
+Command	Description
+docker build	Build an image from a Dockerfile
+docker run	Run a container from an image
+docker ps	List running containers
+docker logs	View container logs
+docker stop	Stop a running container
+docker rm	Remove a container
+Best Practices Applied
 
-| Command | Description |
-|---------|-------------|
-| `docker build` | بناء الـ image من الـ Dockerfile |
-| `docker run` | تشغيل container من الـ image |
-| `docker ps` | عرض الـ containers اللي شغالة |
-| `docker logs` | عرض logs الـ container |
-| `docker stop` | إيقاف الـ container |
-| `docker rm` | حذف الـ container |
+✅ Use of a slim base image to reduce image size
+✅ Copying requirements.txt first to leverage Docker layer caching
+✅ Using --no-cache-dir to minimize image size
+✅ Explicitly exposing the application port
 
-## Best Practices Applied
-✅ استخدام slim image لتقليل الحجم  
-✅ نسخ requirements.txt أولاً للاستفادة من Docker layer caching  
-✅ استخدام `--no-cache-dir` لتقليل حجم الـ image  
-✅ تحديد port واضح للـ application
+Notes
 
-## Notes
-- تأكد إن ملف `requirements.txt` موجود في نفس المجلد
-- الـ application بيشتغل على port 5000 by default
-- ممكن تغير الـ port في الـ `docker run` command
+Ensure that requirements.txt exists in the project directory.
+
+The application runs on port 5000 by default.
+
+The exposed port can be changed using the -p option in the docker run command.

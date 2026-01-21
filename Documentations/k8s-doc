@@ -1,0 +1,275 @@
+# Kubernetes - Container Orchestration Documentation
+
+## Overview
+Kubernetes is used for container orchestration to automate deployment, scaling, and management of containerized applications. This setup ensures high availability and easy scalability for the Flask application.
+
+---
+
+## Project Structure
+```
+k8s/
+├── namespace.yaml
+├── deployment.yaml
+└── service.yaml
+```
+
+---
+
+## Configuration Files
+
+### 1. Namespace Configuration
+**File:** `namespace.yaml`
+
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ivolve
+```
+
+**Purpose:** Creates an isolated namespace called `ivolve` to organize application resources.
+
+**Benefits:**
+- Better resource organization
+- Application isolation
+- Easier permission and quota management
+
+---
+
+### 2. Deployment Configuration
+**File:** `deployment.yaml`
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-app
+  namespace: ivolve
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: flask-app
+  template:
+    metadata:
+      labels:
+        app: flask-app
+    spec:
+      containers:
+        - name: flask-app
+          image: omarredaa/final-app:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+```
+
+**Key Components:**
+
+| Component | Value | Description |
+|-----------|-------|-------------|
+| **replicas** | 2 | Number of pod instances for high availability |
+| **image** | omarredaa/final-app:v1 | Docker image from DockerHub |
+| **imagePullPolicy** | IfNotPresent | Uses local image if available |
+| **containerPort** | 5000 | Application port inside the container |
+
+**Features:**
+- **High Availability:** Multiple replicas ensure uptime
+- **Auto-healing:** Kubernetes automatically restarts failed pods
+- **Easy Scaling:** Scale up or down with simple commands
+
+---
+
+### 3. Service Configuration
+**File:** `service.yaml`
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: flask-service
+  namespace: ivolve
+spec:
+  type: NodePort
+  selector:
+    app: flask-app
+  ports:
+    - port: 80
+      targetPort: 5000
+      nodePort: 30007
+```
+
+**Key Components:**
+
+| Component | Value | Description |
+|-----------|-------|-------------|
+| **type** | NodePort | Allows external access to the cluster |
+| **port** | 80 | Service port |
+| **targetPort** | 5000 | Container port |
+| **nodePort** | 30007 | External access port |
+
+**Traffic Flow:**
+```
+External Request → NodeIP:30007 → Service:80 → Pod:5000
+```
+
+---
+
+## Deployment Steps
+
+### Prerequisites
+```bash
+# Verify Kubernetes cluster is running
+kubectl cluster-info
+
+# Or start Minikube
+minikube start
+```
+
+### Step 1: Create Namespace
+```bash
+kubectl apply -f namespace.yaml
+```
+
+**Verify:**
+```bash
+kubectl get namespaces
+```
+
+### Step 2: Deploy Application
+```bash
+kubectl apply -f deployment.yaml
+```
+
+**Verify:**
+```bash
+kubectl get deployments -n ivolve
+kubectl get pods -n ivolve
+```
+
+### Step 3: Create Service
+```bash
+kubectl apply -f service.yaml
+```
+
+**Verify:**
+```bash
+kubectl get services -n ivolve
+```
+
+### Step 4: Access Application
+
+**Using Minikube:**
+```bash
+minikube service flask-service -n ivolve
+```
+
+**Using Regular Cluster:**
+```bash
+# Get Node IP
+kubectl get nodes -o wide
+
+# Access at:
+http://<NODE_IP>:30007
+```
+
+---
+
+## Useful Commands
+
+### Monitoring & Debugging
+```bash
+# List all resources in namespace
+kubectl get all -n ivolve
+
+# View pod logs
+kubectl logs <pod-name> -n ivolve
+
+# Execute commands inside pod
+kubectl exec -it <pod-name> -n ivolve -- /bin/bash
+
+# Describe pod (troubleshooting)
+kubectl describe pod <pod-name> -n ivolve
+
+# Watch pods in real-time
+kubectl get pods -n ivolve -w
+```
+
+### Scaling
+```bash
+# Scale deployment
+kubectl scale deployment flask-app --replicas=3 -n ivolve
+
+# Verify scaling
+kubectl get deployments -n ivolve
+```
+
+### Updates & Rollbacks
+```bash
+# Update image
+kubectl set image deployment/flask-app flask-app=omarredaa/final-app:v2 -n ivolve
+
+# Check rollout status
+kubectl rollout status deployment/flask-app -n ivolve
+
+# Rollback to previous version
+kubectl rollout undo deployment/flask-app -n ivolve
+```
+
+### Cleanup
+```bash
+# Delete resources
+kubectl delete -f service.yaml
+kubectl delete -f deployment.yaml
+kubectl delete -f namespace.yaml
+
+# Or delete entire namespace
+kubectl delete namespace ivolve
+```
+
+---
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────┐
+│         Kubernetes Cluster              │
+│                                         │
+│  ┌───────────────────────────────────┐ │
+│  │      Namespace: ivolve            │ │
+│  │                                   │ │
+│  │  ┌─────────────────────────────┐ │ │
+│  │  │  Service (NodePort)         │ │ │
+│  │  │  External Port: 30007       │ │ │
+│  │  └──────────┬──────────────────┘ │ │
+│  │             │                     │ │
+│  │  ┌──────────▼──────────────────┐ │ │
+│  │  │     Deployment              │ │ │
+│  │  │     Replicas: 2             │ │ │
+│  │  │                             │ │ │
+│  │  │  ┌────────┐   ┌────────┐   │ │ │
+│  │  │  │  Pod1  │   │  Pod2  │   │ │ │
+│  │  │  │  :5000 │   │  :5000 │   │ │ │
+│  │  │  └────────┘   └────────┘   │ │ │
+│  │  └─────────────────────────────┘ │ │
+│  └───────────────────────────────────┘ │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## Best Practices
+
+✅ Use namespaces for resource isolation  
+✅ Run multiple replicas for high availability  
+✅ Use labels and selectors for service discovery  
+✅ Implement NodePort for external access  
+✅ Set imagePullPolicy to optimize bandwidth
+
+---
+
+## Important Notes
+
+⚠️ **NodePort Range:** Must be between 30000-32767  
+💡 **Production:** Use LoadBalancer or Ingress instead of NodePort  
+🔍 **Debugging:** Use `kubectl describe` and `kubectl logs` for troubleshooting  
+📊 **Monitoring:** Use `kubectl top pods` to monitor resource usage
