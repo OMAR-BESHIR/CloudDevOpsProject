@@ -1,0 +1,104 @@
+# Docker - Containerization Documentation
+
+## Overview
+تم استخدام Docker لعمل containerization للـ Python application عشان نضمن إن الـ application يشتغل بنفس الطريقة في أي environment.
+
+## Files Structure
+```
+.
+├── Dockerfile
+├── app.py
+└── requirements.txt
+```
+
+## Dockerfile Explanation
+
+### Base Image
+```dockerfile
+FROM python:3.10-slim
+```
+- استخدمنا `python:3.10-slim` كـ base image
+- الـ slim version أخف وأصغر في الحجم من الـ full image
+
+### Working Directory
+```dockerfile
+WORKDIR /app
+```
+- بنحدد `/app` كـ working directory جوا الـ container
+
+### Dependencies Installation
+```dockerfile
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+```
+- بننسخ ملف الـ `requirements.txt` الأول
+- بنستخدم `--no-cache-dir` عشان نقلل حجم الـ image
+
+### Application Files
+```dockerfile
+COPY . .
+```
+- بننسخ كل ملفات الـ application جوا الـ container
+
+### Port & Command
+```dockerfile
+EXPOSE 5000
+CMD ["python", "app.py"]
+```
+- بنفتح الـ port 5000 للـ application
+- بنشغل الـ application باستخدام Python
+
+## How to Build & Run
+
+### 1. Build the Docker Image
+```bash
+docker build -t my-python-app:latest .
+```
+
+### 2. Run the Container
+```bash
+docker run -d -p 5000:5000 --name my-app my-python-app:latest
+```
+
+### 3. Verify the Container is Running
+```bash
+docker ps
+```
+
+### 4. Test the Application
+```bash
+curl http://localhost:5000
+```
+
+### 5. View Container Logs
+```bash
+docker logs my-app
+```
+
+### 6. Stop & Remove Container
+```bash
+docker stop my-app
+docker rm my-app
+```
+
+## Docker Commands Summary
+
+| Command | Description |
+|---------|-------------|
+| `docker build` | بناء الـ image من الـ Dockerfile |
+| `docker run` | تشغيل container من الـ image |
+| `docker ps` | عرض الـ containers اللي شغالة |
+| `docker logs` | عرض logs الـ container |
+| `docker stop` | إيقاف الـ container |
+| `docker rm` | حذف الـ container |
+
+## Best Practices Applied
+✅ استخدام slim image لتقليل الحجم  
+✅ نسخ requirements.txt أولاً للاستفادة من Docker layer caching  
+✅ استخدام `--no-cache-dir` لتقليل حجم الـ image  
+✅ تحديد port واضح للـ application
+
+## Notes
+- تأكد إن ملف `requirements.txt` موجود في نفس المجلد
+- الـ application بيشتغل على port 5000 by default
+- ممكن تغير الـ port في الـ `docker run` command
