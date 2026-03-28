@@ -36,7 +36,7 @@ Developer Push → GitHub → Jenkins CI → DockerHub → Git Manifests → Arg
 
 ### High-Level Architecture Diagram
 
-![CI/CD Architecture](images/architecture.png)
+![Architecture Diagram](images/architecture.jpeg)
 
 ---
 
@@ -227,9 +227,6 @@ kubectl apply -f argocd/application.yaml
 
 ![ArgoCD Dashboard](images/argocd.png)
 
-### Application Running
-
-![Application Running](images/application.png)
 
 ---
 
@@ -289,7 +286,7 @@ kubectl apply -f argocd/application.yaml
 **Omar Beshir**
 
 * GitHub: @OMAR-BESHIR
-* Email: [obeshir306@gmail.com](mailto:obeshir306@gmail.com)
+* Email: [omarreda011284@gmail.com](mailto:omarreda011284@gmail.com)
 
 ---
 
